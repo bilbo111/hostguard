@@ -12,21 +12,19 @@ echo "========================================="
 echo "    HostGuard Installation / Установка   "
 echo "========================================="
 
-# 1. Заставляем apt ставить пакеты абсолютно молча (без фиолетовых окон)
-export DEBIAN_FRONTEND=noninteractive
-# Стало (правильный синтаксис для debconf):
-echo "iptables-persistent iptables-persistent/autosave_v4 boolean true" | debconf-set-selections
-echo "iptables-persistent iptables-persistent/autosave_v6 boolean true" | debconf-set-selections
-
 # Тихо снимаем блокировки apt, если они зависли
 systemctl stop unattended-upgrades 2>/dev/null || true
 killall apt apt-get 2>/dev/null || true
 rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
 rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock
 
-# Ставим нужные утилиты в фоновом режиме
+# Ставим нужные утилиты в фоновом режиме (БЕЗ использования debconf-set-selections)
+echo "Installing required packages... / Установка пакетов..."
 apt-get update -y -qq
-apt-get install -y curl ipset iptables iptables-persistent -qq
+
+# DEBIAN_FRONTEND=noninteractive + yes "" гарантируют, что iptables-persistent не покажет никаких окон и выберет дефолтные ответы
+export DEBIAN_FRONTEND=noninteractive
+yes "" | apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl ipset iptables iptables-persistent -qq
 
 # ---------------------------------------------------------------------
 # 2. ВЫБОР ЯЗЫКА / LANGUAGE SELECTION (ПРОСТЫМ ТЕКСТОМ)
