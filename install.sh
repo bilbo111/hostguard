@@ -14,8 +14,9 @@ echo "========================================="
 
 # 1. Заставляем apt ставить пакеты абсолютно молча (без фиолетовых окон)
 export DEBIAN_FRONTEND=noninteractive
-echo "local iptables-persistent shared/autosave_v4 boolean true" | debconf-set-selections
-echo "local iptables-persistent shared/autosave_v6 boolean true" | debconf-set-selections
+# Стало (правильный синтаксис для debconf):
+echo "iptables-persistent iptables-persistent/autosave_v4 boolean true" | debconf-set-selections
+echo "iptables-persistent iptables-persistent/autosave_v6 boolean true" | debconf-set-selections
 
 # Тихо снимаем блокировки apt, если они зависли
 systemctl stop unattended-upgrades 2>/dev/null || true
