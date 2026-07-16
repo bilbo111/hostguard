@@ -2,21 +2,23 @@
 
 set -e
 
-VERSION="1.0.0"
+HOSTGUARD_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-source "$ROOT_DIR/lib/utils.sh"
-source "$ROOT_DIR/lib/detect.sh"
-source "$ROOT_DIR/lib/config.sh"
-source "$ROOT_DIR/lib/menu.sh"
-
-check_root
+source "$HOSTGUARD_DIR/lib/utils.sh"
+source "$HOSTGUARD_DIR/lib/detect.sh"
 
 detect_os
 
-choose_language
+source "$HOSTGUARD_DIR/lang/${LANGUAGE}.sh"
+
+source "$HOSTGUARD_DIR/lib/menu.sh"
+source "$HOSTGUARD_DIR/lib/config.sh"
+source "$HOSTGUARD_DIR/lib/installer.sh"
+
+print_banner
+
+main_menu
 
 save_config
 
-show_main_menu
+run_install
