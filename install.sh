@@ -1,5 +1,5 @@
 #!/bin/bash
-# HostGuard Installer, Uninstaller & Config Reset (Pure Text Edition)
+# HostGuard Installer, Uninstaller & Config Reset (Fixed Maxelem Edition)
 set -e
 
 # Проверка на root
@@ -172,8 +172,8 @@ echo "$T_APPLYING"
 # Выполняем сброс перед чистой установкой
 do_reset
 
-# Создание чистых ipset списков в памяти
-if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 65536 2>/dev/null || true; fi
+# Создание чистых ipset списков в памяти с ОДИНАКОВЫМ лимитом 262144
+if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 262144 2>/dev/null || true; fi
 if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; fi
 
 # Создание скрипта обновления
@@ -189,7 +189,7 @@ update_set() {
         # 1. Гарантированно удаляем старый временный сет, если он завис в памяти
         ipset destroy ${set_name}_temp 2>/dev/null || true
         
-        # 2. Создаем чистый временный сет
+        # 2. Создаем чистый временный сет с лимитом 262144 (строго совпадает с основным!)
         ipset create ${set_name}_temp hash:net family inet maxelem 262144 2>/dev/null || ipset flush ${set_name}_temp
         
         # 3. Пишем в restore-файл ТОЛЬКО команды добавления (add), БЕЗ команды create.
@@ -198,7 +198,7 @@ update_set() {
         
         # 4. Восстанавливаем данные во временный сет без вывода ошибок
         if ipset restore < "$restore_file" 2>/dev/null; then
-            # Убеждаемся, что основной сет существует
+            # Убеждаемся, что основной сет существует с тем же лимитом
             ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
             # Меняем временный и основной сеты местами (мгновенно атомарно)
             ipset swap ${set_name}_temp $set_name
