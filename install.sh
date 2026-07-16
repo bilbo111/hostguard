@@ -1,5 +1,5 @@
 #!/bin/bash
-# HostGuard Installer & Uninstaller (Pure Text Edition)
+# HostGuard Installer, Uninstaller & Config Reset (Pure Text Edition)
 set -e
 
 # Проверка на root
@@ -26,21 +26,21 @@ export DEBIAN_FRONTEND=noninteractive
 yes "" | apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl ipset iptables iptables-persistent -qq
 
 # ---------------------------------------------------------------------
-# 2. ВЫБОР ЯЗЫКА / LANGUAGE SELECTION (ПРОСТЫМ ТЕКСТОМ)
+# 2. ВЫБОР ЯЗЫКА / LANGUAGE SELECTION
 # ---------------------------------------------------------------------
 echo
 echo "Choose your language / Выберите язык:"
 echo "1) Русский (Russian)"
 echo "2) English"
-# Читаем ввод напрямую из терминала /dev/tty
 read -p "Enter 1 or 2: " LANG_CHOICE < /dev/tty
 
 if [ "$LANG_CHOICE" = "1" ]; then
     T_MENU_TITLE="--- Главное меню HostGuard ---"
     T_OPT_INSTALL="1) Установка и настройка защиты"
-    T_OPT_UNINSTALL="2) Полное удаление HostGuard"
-    T_OPT_EXIT="3) Выход"
-    T_PROMPT_ACTION="Выберите действие (1-3): "
+    T_OPT_RESET="2) Сбросить настройки и правила (Очистка)"
+    T_OPT_UNINSTALL="3) Полное удаление HostGuard"
+    T_OPT_EXIT="4) Выход"
+    T_PROMPT_ACTION="Выберите действие (1-4): "
     
     T_Q_SPAM="Установить базу Spamhaus DROP? (y/n): "
     T_Q_FIRE="Установить базу FireHOL Level 1? (y/n): "
@@ -48,7 +48,9 @@ if [ "$LANG_CHOICE" = "1" ]; then
     T_Q_SMTP="Блокировать исходящую почту (защита от спам-ботов)? (y/n): "
     T_Q_CRON="Включить автообновление баз каждые 6 часов через Cron? (y/n): "
     
-    T_UNINSTALLING="Удаление правил и баз данных..."
+    T_RESETTING="Сброс всех правил и очистка баз ipset..."
+    T_RESET_SUCCESS="Все правила сброшены! Теперь вы можете настроить защиту заново."
+    T_UNINSTALLING="Удаление файлов и утилит HostGuard..."
     T_UN_SUCCESS="HostGuard успешно удален с сервера!"
     
     T_APPLYING="Применение настроек..."
@@ -58,9 +60,10 @@ if [ "$LANG_CHOICE" = "1" ]; then
 else
     T_MENU_TITLE="--- HostGuard Main Menu ---"
     T_OPT_INSTALL="1) Install and configure protection"
-    T_OPT_UNINSTALL="2) Completely remove HostGuard"
-    T_OPT_EXIT="3) Exit"
-    T_PROMPT_ACTION="Select action (1-3): "
+    T_OPT_RESET="2) Reset configurations and rules (Clean)"
+    T_OPT_UNINSTALL="3) Completely remove HostGuard"
+    T_OPT_EXIT="4) Exit"
+    T_PROMPT_ACTION="Select action (1-4): "
     
     T_Q_SPAM="Install Spamhaus DROP database? (y/n): "
     T_Q_FIRE="Install FireHOL Level 1 database? (y/n): "
@@ -68,7 +71,9 @@ else
     T_Q_SMTP="Block outgoing SMTP (anti-spam)? (y/n): "
     T_Q_CRON="Enable automatic DB updates every 6 hours via Cron? (y/n): "
     
-    T_UNINSTALLING="Removing rules and databases..."
+    T_RESETTING="Resetting all rules and flushing ipset databases..."
+    T_RESET_SUCCESS="All rules reset! You can now configure protection from scratch."
+    T_UNINSTALLING="Removing HostGuard files and utilities..."
     T_UN_SUCCESS="HostGuard successfully removed from server!"
     
     T_APPLYING="Applying configurations..."
@@ -78,21 +83,13 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# 3. ГЛАВНОЕ МЕНЮ / MAIN MENU
+# 3. ФУНКЦИЯ СБРОСА ПРАВИЛ / RESET FUNCTION
 # ---------------------------------------------------------------------
-echo
-echo "$T_MENU_TITLE"
-echo "$T_OPT_INSTALL"
-echo "$T_OPT_UNINSTALL"
-echo "$T_OPT_EXIT"
-echo "-----------------------------------------"
-# Читаем ввод напрямую из терминала /dev/tty
-read -p "$T_PROMPT_ACTION" MENU_ACTION < /dev/tty
-
-# Функция удаления
-do_uninstall() {
+do_reset() {
     echo
-    echo "$T_UNINSTALLING"
+    echo "$T_RESETTING"
+    
+    # Удаляем правила из iptables
     iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
     iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
     iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
@@ -101,27 +98,48 @@ do_uninstall() {
     iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
     iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
 
+    # Сохраняем чистый iptables
     if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 
+    # Полностью уничтожаем сеты ipset (включая временные)
     ipset destroy spamhaus 2>/dev/null || true
+    ipset destroy spamhaus_temp 2>/dev/null || true
     ipset destroy firehol 2>/dev/null || true
+    ipset destroy firehol_temp 2>/dev/null || true
 
-    rm -f /usr/local/bin/hostguard-update.sh
+    # Чистим Cron-задачу автообновления
     rm -f /etc/cron.d/hostguard-update
-
-    echo "$T_UN_SUCCESS"
-    exit 0
 }
 
+# ---------------------------------------------------------------------
+# 4. ГЛАВНОЕ МЕНЮ / MAIN MENU
+# ---------------------------------------------------------------------
+echo
+echo "$T_MENU_TITLE"
+echo "$T_OPT_INSTALL"
+echo "$T_OPT_RESET"
+echo "$T_OPT_UNINSTALL"
+echo "$T_OPT_EXIT"
+echo "-----------------------------------------"
+read -p "$T_PROMPT_ACTION" MENU_ACTION < /dev/tty
+
 if [ "$MENU_ACTION" = "2" ]; then
-    do_uninstall
-elif [ "$MENU_ACTION" = "3" ] || [ -z "$MENU_ACTION" ]; then
+    do_reset
+    echo "$T_RESET_SUCCESS"
+    exit 0
+elif [ "$MENU_ACTION" = "3" ]; then
+    do_reset
+    echo "$T_UNINSTALLING"
+    rm -f /usr/local/bin/hostguard-update.sh
+    echo "$T_UN_SUCCESS"
+    exit 0
+elif [ "$MENU_ACTION" = "4" ] || [ -z "$MENU_ACTION" ]; then
     echo "$T_BYE"
     exit 0
 fi
 
 # ---------------------------------------------------------------------
-# 4. ОПРОС ПОЛЬЗОВАТЕЛЯ / INTERACTIVE QUESTIONS
+# 5. ОПРОС ПОЛЬЗОВАТЕЛЯ / INTERACTIVE QUESTIONS
 # ---------------------------------------------------------------------
 echo
 echo "--- Configuration / Настройка ---"
@@ -146,23 +164,17 @@ if ask_yes_no "$T_Q_SMTP"; then USE_SMTP=1; else USE_SMTP=0; fi
 if ask_yes_no "$T_Q_CRON"; then USE_CRON=1; else USE_CRON=0; fi
 
 # ---------------------------------------------------------------------
-# 5. ПРИМЕНЕНИЕ НАСТРОЕК
+# 6. ПРИМЕНЕНИЕ НАСТРОЕК
 # ---------------------------------------------------------------------
 echo
 echo "$T_APPLYING"
 
-# Чистим старое на случай переустановки
-iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
-iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
-iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
-iptables -D INPUT -m set --match-set firehol src -j DROP 2>/dev/null || true
-iptables -D OUTPUT -p tcp --dport 22 -j DROP 2>/dev/null || true
-iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
-iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
+# Выполняем сброс перед чистой установкой
+do_reset
 
-# Создание ipset списков
-if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 65536 2>/dev/null || true; else ipset destroy spamhaus 2>/dev/null || true; fi
-if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; else ipset destroy firehol 2>/dev/null || true; fi
+# Создание чистых ipset списков в памяти
+if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 65536 2>/dev/null || true; fi
+if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; fi
 
 # Создание скрипта обновления
 cat << 'EOF' > /usr/local/bin/hostguard-update.sh
@@ -172,21 +184,25 @@ update_set() {
     local url=$2
     local tmp_file="/tmp/${set_name}.txt"
     local restore_file="/tmp/${set_name}.restore"
+    
     if curl -fsSL "$url" -o "$tmp_file"; then
-        # 1. Гарантированно удаляем старый временный сет перед созданием нового
+        # 1. Гарантированно удаляем старый временный сет, если он завис в памяти
         ipset destroy ${set_name}_temp 2>/dev/null || true
         
-        # 2. Создаем временный сет заново
+        # 2. Создаем чистый временный сет
         ipset create ${set_name}_temp hash:net family inet maxelem 262144 2>/dev/null || ipset flush ${set_name}_temp
         
-        # 3. Пишем в файл восстановления команды только для временного сета
-        echo "create ${set_name}_temp hash:net family inet maxelem 262144" > "$restore_file"
-        grep -E "^[0-9]" "$tmp_file" | awk '{print "add '${set_name}'_temp " $1}' >> "$restore_file"
+        # 3. Пишем в restore-файл ТОЛЬКО команды добавления (add), БЕЗ команды create.
+        # Парсим исключительно чистые IP/подсети, убирая комментарии и пустые строки.
+        grep -E "^[0-9]" "$tmp_file" | awk '{print "add '${set_name}'_temp " $1}' > "$restore_file"
         
-        # 4. Применяем и меняем местами без вывода ошибок в консоль
+        # 4. Восстанавливаем данные во временный сет без вывода ошибок
         if ipset restore < "$restore_file" 2>/dev/null; then
+            # Убеждаемся, что основной сет существует
             ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
+            # Меняем временный и основной сеты местами (мгновенно атомарно)
             ipset swap ${set_name}_temp $set_name
+            # Удаляем временный сет из памяти
             ipset destroy ${set_name}_temp 2>/dev/null || true
         fi
         rm -f "$tmp_file" "$restore_file"
@@ -225,7 +241,7 @@ else
     rm -f /etc/cron.d/hostguard-update
 fi
 
-# Сохранение правил
+# Сохранение правил на постоянной основе
 if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 
 echo
