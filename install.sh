@@ -1,5 +1,5 @@
 #!/bin/bash
-# HostGuard Installer, Uninstaller & Config Reset (Safe Parser Edition)
+# HostGuard Installer, Uninstaller & Config Reset (True Working Edition)
 set -e
 
 # Проверка на root
@@ -98,7 +98,7 @@ do_reset() {
     iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
     iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
 
-    # Разрешающие правила для DNS
+    # Разрешающие правила для DNS (чтобы не ломать резолв при очистке)
     iptables -D OUTPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
     iptables -D OUTPUT -p tcp --dport 53 -j ACCEPT 2>/dev/null || true
 
@@ -180,32 +180,33 @@ do_reset
 if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 262144 2>/dev/null || true; fi
 if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; fi
 
-# Создание скрипта обновления
+# Создание скрипта обновления на основе ТВОЕГО рабочего метода
 cat << 'EOF' > /usr/local/bin/hostguard-update.sh
 #!/bin/bash
 update_set() {
     local set_name=$1
     local url=$2
     local tmp_file="/tmp/${set_name}.txt"
-    local restore_file="/tmp/${set_name}.restore"
     
     if curl -fsSL "$url" -o "$tmp_file"; then
-        # Убеждаемся, что рабочий сет существует
-        ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
-        
-        # Очищаем рабочий сет перед заливкой
+        # 1. Очищаем рабочий ipset
         ipset flush $set_name 2>/dev/null || true
         
-        # Парсим IP, вырезая точку с запятой и все пробелы после неё
-        grep -E "^[0-9]" "$tmp_file" | sed 's/;.*//' | awk '{print "add '"$set_name"' " $1}' > "$restore_file"
+        # 2. Твой надежный построчный импорт с очисткой от комментариев
+        grep -E "^[0-9]" "$tmp_file" | awk -F';' '{print $1}' | while read -r net
+        do
+            # Убираем возможные пробелы по краям
+            net_clean=$(echo "$net" | xargs)
+            if [ -n "$net_clean" ]; then
+                ipset add $set_name "$net_clean" -exist 2>/dev/null || true
+            fi
+        done
         
-        # Восстанавливаем базу одной транзакцией
-        ipset restore < "$restore_file" 2>/dev/null || true
-        
-        # Чистим временные файлы
-        rm -f "$tmp_file" "$restore_file"
+        # 3. Чистим за собой временный файл
+        rm -f "$tmp_file"
     fi
 }
+
 if ipset list spamhaus >/dev/null 2>&1; then update_set "spamhaus" "https://www.spamhaus.org/drop/drop.txt"; fi
 if ipset list firehol >/dev/null 2>&1; then update_set "firehol" "https://iplists.firehol.org/files/firehol_level1.netset"; fi
 EOF
