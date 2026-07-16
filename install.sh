@@ -10,29 +10,50 @@ fi
 
 # ---------------------------------------------------------------------
 # ХИТРЫЙ ХАК ДЛЯ ЗАПУСКА ЧЕРЕЗ CURL | BASH
-# Если скрипт читается из stdin (пайпа), сохраняем его и перезапускаем нормально
 # ---------------------------------------------------------------------
 if [ ! -t 0 ]; then
-  # Создаем временный файл
   TMP_SCRIPT=$(mktemp /tmp/hostguard-XXXXXX.sh)
-  # Записываем туда всё, что пришло из curl
-  cat> "$TMP_SCRIPT"
-  # Запускаем уже локально, вернув управление терминалу
-  bash "$TMP_SCRIPT" "$@" < /dev/tty
-  # Удаляем временный файл после работы
+  cat > "$TMP_SCRIPT"
+  # Запускаем локально и передаем управление назад терминалу
+  bash "$TMP_SCRIPT" "$@" < /dev/tty || true
   rm -f "$TMP_SCRIPT"
   exit 0
 fi
 
 # Тихо ставим whiptail и зависимости, если их нет
-apt-get update -qq && apt-get install -y whiptail curl ipset iptables iptables-persistent -qq >/dev/null 2>&1
+echo "Checking and releasing apt locks if active..."
+systemctl stop unattended-upgrades 2>/dev/null || true
+killall apt apt-get 2>/dev/null || true
+rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
+rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock
+
+echo "Installing required system packages..."
+apt-get update -y && apt-get install -y whiptail curl ipset iptables iptables-persistent
+
+# ---------------------------------------------------------------------
+# Функция безопасного выхода при нажатии Cancel/Esc
+# ---------------------------------------------------------------------
+safe_exit() {
+    clear
+    echo "Installation cancelled by user."
+    exit 0
+}
 
 # ---------------------------------------------------------------------
 # 1. ВЫБОР ЯЗЫКА / LANGUAGE SELECTION
 # ---------------------------------------------------------------------
+# Временно отключаем set -e, чтобы обработать код выхода whiptail
+set +e
 LANG_CHOICE=$(whiptail --title "HostGuard Configuration" --menu "Choose your language / Выберите язык" 15 50 2 \
 "1" "Русский (Russian)" \
 "2" "English" 3>&1 1>&2 2>&3)
+EXIT_CODE=$?
+set -e
+
+# Если нажали Cancel (1) или Esc (255)
+if [ $EXIT_CODE -ne 0 ]; then
+    safe_exit
+fi
 
 if [ "$LANG_CHOICE" = "1" ]; then
     T_TITLE="Управление HostGuard"
@@ -69,9 +90,16 @@ fi
 # ---------------------------------------------------------------------
 # 2. ГЛАВНОЕ МЕНЮ / MAIN MENU
 # ---------------------------------------------------------------------
+set +e
 ACTION=$(whiptail --title "$T_TITLE" --menu "$T_MAIN_MENU" 15 60 2 \
 "INSTALL" "$T_M_INSTALL" \
 "UNINSTALL" "$T_M_UNINSTALL" 3>&1 1>&2 2>&3)
+EXIT_CODE=$?
+set -e
+
+if [ $EXIT_CODE -ne 0 ]; then
+    safe_exit
+fi
 
 # ---------------------------------------------------------------------
 # ФУНКЦИЯ УДАЛЕНИЯ / UNINSTALL
@@ -94,6 +122,7 @@ do_uninstall() {
     rm -f /etc/cron.d/hostguard-update
 
     whiptail --title "$T_TITLE" --msgbox "$T_UN_SUCCESS" 10 50
+    clear
     exit 0
 }
 
@@ -104,12 +133,19 @@ fi
 # ---------------------------------------------------------------------
 # 3. ВЫБОР КОМПОНЕНТОВ / COMPONENT SELECTION
 # ---------------------------------------------------------------------
+set +e
 CHOICES=$(whiptail --title "$T_TITLE" --checklist "$T_COMP_MENU" 20 75 5 \
 "SPAMHAUS" "$T_C_SPAM" ON \
 "FIREHOL" "$T_C_FIRE" ON \
 "SSH" "$T_C_SSH" OFF \
 "SMTP" "$T_C_SMTP" ON \
 "CRON" "$T_C_CRON" ON 3>&1 1>&2 2>&3)
+EXIT_CODE=$?
+set -e
+
+if [ $EXIT_CODE -ne 0 ]; then
+    safe_exit
+fi
 
 [[ $CHOICES == *"SPAMHAUS"* ]] && USE_SPAM=1 || USE_SPAM=0
 [[ $CHOICES == *"FIREHOL"* ]] && USE_FIRE=1 || USE_FIRE=0
@@ -189,3 +225,4 @@ echo 100
 
 # Финальное уведомление
 whiptail --title "$T_TITLE" --msgbox "$T_SUCCESS" 10 50
+clear
