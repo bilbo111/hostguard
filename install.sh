@@ -190,25 +190,20 @@ update_set() {
     local restore_file="/tmp/${set_name}.restore"
     
     if curl -fsSL "$url" -o "$tmp_file"; then
-        # 1. Убеждаемся, что рабочий сет существует
+        # Убеждаемся, что рабочий сет существует
         ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
         
-        # 2. Очищаем рабочий сет перед заливкой новых данных
+        # Очищаем рабочий сет перед заливкой
         ipset flush $set_name 2>/dev/null || true
         
-        # 3. Парсинг с защитой от точек с запятой и комментариев.
-        # -F';' разделяет строку по точке с запятой и забирает только левую часть (чистый IP).
-        # После этого убираются лишние пробелы и пустые строки.
-        grep -E "^[0-9]" "$tmp_file" | awk -F';' '{print $1}' | awk '{print "add '${set_name}' " $1}' > "$restore_file"
+        # Парсим IP, вырезая точку с запятой и все пробелы после неё
+        grep -E "^[0-9]" "$tmp_file" | sed 's/;.*//' | awk '{print "add '"$set_name"' " $1}' > "$restore_file"
         
-        # 4. Восстанавливаем данные одной мгновенной операцией
+        # Восстанавливаем базу одной транзакцией
         ipset restore < "$restore_file" 2>/dev/null || true
         
-        # 5. Чистим за собой файлы
+        # Чистим временные файлы
         rm -f "$tmp_file" "$restore_file"
-        
-        # 6. Чистим старые временные сеты, если они зависли
-        ipset destroy ${set_name}_temp 2>/dev/null || true
     fi
 }
 if ipset list spamhaus >/dev/null 2>&1; then update_set "spamhaus" "https://www.spamhaus.org/drop/drop.txt"; fi
