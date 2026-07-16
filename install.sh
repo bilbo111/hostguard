@@ -173,7 +173,12 @@ update_set() {
     local tmp_file="/tmp/${set_name}.txt"
     local restore_file="/tmp/${set_name}.restore"
     if curl -fsSL "$url" -o "$tmp_file"; then
+        # Гарантированно удаляем старый временный сет перед созданием нового
+        ipset destroy ${set_name}_temp 2>/dev/null || true
+        
+        # Создаем временный сет заново
         ipset create ${set_name}_temp hash:net family inet maxelem 262144 2>/dev/null || ipset flush ${set_name}_temp
+        
         echo "create ${set_name}_temp hash:net family inet maxelem 262144" > "$restore_file"
         grep -E "^[0-9]" "$tmp_file" | awk '{print "add '${set_name}'_temp " $1}' >> "$restore_file"
         if ipset restore < "$restore_file"; then
