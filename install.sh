@@ -132,8 +132,8 @@ ask_yes_no() {
     while true; do
         read -p "$prompt" ans < /dev/tty
         case "$ans" in
-            [Yy]* ) return 0;;
-            [Nn]* ) return 1;;
+            [Yy]*|[Дд]* ) return 0;;
+            [Nn]*|[Нн]* ) return 1;;
             * ) echo "Please answer y or n / Пожалуйста, введите y или n.";;
         esac
     done
@@ -173,18 +173,21 @@ update_set() {
     local tmp_file="/tmp/${set_name}.txt"
     local restore_file="/tmp/${set_name}.restore"
     if curl -fsSL "$url" -o "$tmp_file"; then
-        # Гарантированно удаляем старый временный сет перед созданием нового
+        # 1. Гарантированно удаляем старый временный сет перед созданием нового
         ipset destroy ${set_name}_temp 2>/dev/null || true
         
-        # Создаем временный сет заново
+        # 2. Создаем временный сет заново
         ipset create ${set_name}_temp hash:net family inet maxelem 262144 2>/dev/null || ipset flush ${set_name}_temp
         
+        # 3. Пишем в файл восстановления команды только для временного сета
         echo "create ${set_name}_temp hash:net family inet maxelem 262144" > "$restore_file"
         grep -E "^[0-9]" "$tmp_file" | awk '{print "add '${set_name}'_temp " $1}' >> "$restore_file"
-        if ipset restore < "$restore_file"; then
+        
+        # 4. Применяем и меняем местами без вывода ошибок в консоль
+        if ipset restore < "$restore_file" 2>/dev/null; then
             ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
             ipset swap ${set_name}_temp $set_name
-            ipset destroy ${set_name}_temp
+            ipset destroy ${set_name}_temp 2>/dev/null || true
         fi
         rm -f "$tmp_file" "$restore_file"
     fi
