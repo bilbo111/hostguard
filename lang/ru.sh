@@ -1,215 +1,174 @@
 #!/usr/bin/env bash
 
-###############################################################################
-# HostGuard
-# Russian language
-###############################################################################
+#########################################
+# HostGuard Language Pack
+# Russian
+#########################################
 
-#
-# Common
-#
+LANG_NAME="Русский"
+
+# ----------------------------------------------------
+# Общие
+# ----------------------------------------------------
+
+TXT_WELCOME="Добро пожаловать в HostGuard"
+TXT_VERSION="Версия"
+TXT_PRESS_ENTER="Нажмите Enter для продолжения..."
+TXT_DONE="Готово."
+TXT_ERROR="Ошибка"
+TXT_WARNING="Внимание"
+TXT_SUCCESS="Успешно"
+TXT_FAILED="Не удалось"
 
 TXT_YES="Да"
 TXT_NO="Нет"
-TXT_BACK="Назад"
+
+TXT_INSTALL="Установить"
+TXT_UNINSTALL="Удалить"
 TXT_EXIT="Выход"
-TXT_CANCEL="Отмена"
-TXT_CONTINUE="Продолжить"
 
-#
-# Installer
-#
+TXT_BACK="Назад"
+TXT_NEXT="Далее"
 
-TXT_WELCOME="Добро пожаловать в HostGuard"
+TXT_ENABLED="Включено"
+TXT_DISABLED="Отключено"
 
-TXT_DESCRIPTION="HostGuard автоматически усиливает защиту сервера от злоупотреблений и устанавливает защитные правила межсетевого экрана."
+# ----------------------------------------------------
+# Проверки
+# ----------------------------------------------------
 
-TXT_PRESS_ENTER="Нажмите Enter для продолжения..."
+TXT_ROOT_REQUIRED="HostGuard необходимо запускать от root."
 
-TXT_LANGUAGE="Выберите язык"
+TXT_UNSUPPORTED_OS="Данная операционная система пока не поддерживается."
 
-TXT_INSTALL="Установить HostGuard"
+TXT_DEBIAN_DETECTED="Обнаружена Debian"
 
-TXT_UNINSTALL="Удалить HostGuard"
+TXT_UBUNTU_DETECTED="Обнаружена Ubuntu"
 
-TXT_UPDATE="Обновить базы"
+TXT_IPTABLES_DETECTED="Обнаружен iptables"
 
-TXT_QUIT="Выход"
+TXT_NFTABLES_DETECTED="Обнаружен nftables"
 
-#
-# System
-#
+# ----------------------------------------------------
+# Главное меню
+# ----------------------------------------------------
 
-TXT_SYSTEM="Информация о системе"
+TXT_MENU_TITLE="Главное меню"
 
-TXT_OS="Операционная система"
+TXT_MENU_INSTALL="Установить HostGuard"
 
-TXT_VERSION="Версия"
+TXT_MENU_UNINSTALL="Удалить HostGuard"
 
-TXT_ARCH="Архитектура"
+TXT_MENU_EXIT="Выход"
 
-TXT_FIREWALL="Firewall"
+# ----------------------------------------------------
+# Провайдеры
+# ----------------------------------------------------
 
-TXT_PACKAGE_MANAGER="Менеджер пакетов"
-
-TXT_INIT="Система инициализации"
-
-TXT_IPSET="Поддержка ipset"
-
-#
-# Providers
-#
-
-TXT_PROVIDER_SELECTION="Выберите списки блокировок"
+TXT_PROVIDER_TITLE="Выберите списки блокировки"
 
 TXT_PROVIDER_SPAMHAUS="Spamhaus DROP"
 
 TXT_PROVIDER_EDROP="Spamhaus EDROP"
 
-TXT_PROVIDER_FIREHOL="FireHOL"
+TXT_PROVIDER_FIREHOL="FireHOL (скоро)"
 
-TXT_PROVIDER_CUSTOM="Пользовательские списки"
+TXT_PROVIDER_CUSTOM="Пользовательские списки (скоро)"
 
-#
-# Firewall options
-#
+TXT_PROVIDER_SELECTED="Выбрано"
 
-TXT_FIREWALL_OPTIONS="Настройки Firewall"
+# ----------------------------------------------------
+# Firewall
+# ----------------------------------------------------
 
-TXT_ENABLE_SPAMHAUS="Использовать Spamhaus DROP"
+TXT_FW_TITLE="Настройка защиты"
 
-TXT_ENABLE_EDROP="Использовать Spamhaus EDROP"
+TXT_FW_SSH="Блокировать исходящий SSH (22)"
 
-TXT_ENABLE_SSH_BLOCK="Блокировать исходящий SSH"
+TXT_FW_SMTP="Блокировать SMTP (25,465,587)"
 
-TXT_ENABLE_SMTP_BLOCK="Блокировать исходящий SMTP"
+TXT_FW_RDP="Блокировать RDP (3389)"
 
-TXT_ENABLE_RDP_BLOCK="Блокировать исходящий RDP"
+TXT_FW_SAVE="Сохранять правила после установки"
 
-TXT_ENABLE_LOGGING="Включить журналирование"
+TXT_FW_UPDATE="Автоматически обновлять базы"
 
-TXT_ENABLE_AUTORELOAD="Автоматически обновлять базы"
+TXT_FW_IPV6="Применять правила IPv6"
 
-#
-# Installation
-#
+# ----------------------------------------------------
+# Установка
+# ----------------------------------------------------
 
-TXT_START_INSTALL="Начать установку"
+TXT_INSTALL_START="Начинается установка..."
 
-TXT_INSTALLING="Выполняется установка..."
+TXT_INSTALL_PACKAGES="Установка необходимых пакетов..."
 
-TXT_CREATING_IPSET="Создание ipset..."
+TXT_INSTALL_PROVIDER="Загрузка списков блокировки..."
 
-TXT_DOWNLOADING_DATABASES="Загрузка баз..."
+TXT_INSTALL_FIREWALL="Настройка правил firewall..."
 
-TXT_INSTALLING_RULES="Установка правил..."
+TXT_INSTALL_SYSTEMD="Создание службы обновления..."
 
-TXT_SAVING_RULES="Сохранение правил..."
+TXT_INSTALL_CONFIG="Создание конфигурации..."
 
-TXT_CREATING_TIMER="Создание автообновления..."
+TXT_INSTALL_COMPLETE="Установка успешно завершена."
 
-TXT_FINISHED="Установка завершена."
+# ----------------------------------------------------
+# Удаление
+# ----------------------------------------------------
 
-TXT_REBOOT_NOT_REQUIRED="Перезагрузка не требуется."
+TXT_REMOVE_START="Удаление HostGuard..."
 
-#
-# Errors
-#
+TXT_REMOVE_RULES="Удаление правил firewall..."
 
-TXT_ERROR="Ошибка"
+TXT_REMOVE_CONFIG="Удаление конфигурации..."
 
-TXT_WARNING="Предупреждение"
+TXT_REMOVE_SYSTEMD="Удаление служб..."
 
-TXT_SUCCESS="Успешно"
+TXT_REMOVE_COMPLETE="HostGuard успешно удалён."
 
-TXT_FAILED="Не удалось выполнить операцию."
-
-TXT_UNSUPPORTED_OS="Данная операционная система не поддерживается."
-
-TXT_NO_INTERNET="Нет подключения к Интернету."
-
-TXT_NO_ROOT="HostGuard должен быть запущен от root."
-
-TXT_FIREWALL_NOT_FOUND="Не удалось определить firewall."
-
-#
-# Uninstall
-#
-
-TXT_UNINSTALL_TITLE="Удаление HostGuard"
-
-TXT_UNINSTALL_CONFIRM="Удалить HostGuard с сервера?"
-
-TXT_REMOVING_RULES="Удаление правил..."
-
-TXT_REMOVING_IPSET="Удаление ipset..."
-
-TXT_REMOVING_TIMER="Удаление автообновления..."
-
-TXT_UNINSTALL_DONE="HostGuard успешно удалён."
-
-#
-# Update
-#
+# ----------------------------------------------------
+# Обновление
+# ----------------------------------------------------
 
 TXT_UPDATE_TITLE="Обновление баз"
 
-TXT_UPDATING_DATABASES="Обновление списков..."
+TXT_UPDATE_START="Обновление..."
+
+TXT_UPDATE_DOWNLOAD="Загрузка новых списков..."
+
+TXT_UPDATE_APPLY="Применение изменений..."
 
 TXT_UPDATE_DONE="Базы успешно обновлены."
 
-#
-# Menu
-#
+TXT_UPDATE_FAILED="Ошибка обновления."
 
-TXT_MENU_TITLE="Главное меню"
+# ----------------------------------------------------
+# Cron/Systemd
+# ----------------------------------------------------
 
-TXT_MENU_INSTALL="Установить"
+TXT_AUTOUPDATE_ENABLE="Включить автоматическое обновление"
 
-TXT_MENU_UPDATE="Обновить базы"
+TXT_AUTOUPDATE_DISABLE="Не использовать автоматическое обновление"
 
-TXT_MENU_STATUS="Статус"
+TXT_AUTOUPDATE_INTERVAL="Интервал обновления"
 
-TXT_MENU_UNINSTALL="Удалить"
+# ----------------------------------------------------
+# Подтверждения
+# ----------------------------------------------------
 
-TXT_MENU_EXIT="Выход"
+TXT_CONFIRM_INSTALL="Начать установку?"
 
-#
-# Confirmation
-#
+TXT_CONFIRM_UNINSTALL="Удалить HostGuard?"
 
-TXT_CONFIRM_INSTALL="Продолжить установку?"
+TXT_CONFIRM_EXIT="Выйти?"
 
-TXT_CONFIRM_EXIT="Выйти из программы?"
+# ----------------------------------------------------
+# Финал
+# ----------------------------------------------------
 
-TXT_CONFIRM_UNINSTALL="Вы действительно хотите удалить HostGuard?"
+TXT_FINISHED="Работа завершена."
 
-#
-# Summary
-#
-
-TXT_SUMMARY="Итоговая конфигурация"
-
-TXT_SUMMARY_PROVIDER="Провайдеры"
-
-TXT_SUMMARY_FIREWALL="Firewall"
-
-TXT_SUMMARY_AUTORELOAD="Автообновление"
-
-TXT_SUMMARY_SSH="Блокировка SSH"
-
-TXT_SUMMARY_SMTP="Блокировка SMTP"
-
-TXT_SUMMARY_RDP="Блокировка RDP"
-
-TXT_SUMMARY_LOGGING="Журналирование"
-
-TXT_READY="Готово к установке."
-
-#
-# Footer
-#
+TXT_REBOOT_RECOMMENDED="Рекомендуется перезагрузить сервер."
 
 TXT_THANKS="Спасибо за использование HostGuard."
-
-TXT_PROJECT="Open Source проект под лицензией GPL-3.0."
