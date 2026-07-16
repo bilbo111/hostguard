@@ -8,7 +8,23 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Установка whiptail, если его вдруг нет
+# ---------------------------------------------------------------------
+# ХИТРЫЙ ХАК ДЛЯ ЗАПУСКА ЧЕРЕЗ CURL | BASH
+# Если скрипт читается из stdin (пайпа), сохраняем его и перезапускаем нормально
+# ---------------------------------------------------------------------
+if [ ! -t 0 ]; then
+  # Создаем временный файл
+  TMP_SCRIPT=$(mktemp /tmp/hostguard-XXXXXX.sh)
+  # Записываем туда всё, что пришло из curl
+  cat> "$TMP_SCRIPT"
+  # Запускаем уже локально, вернув управление терминалу
+  bash "$TMP_SCRIPT" "$@" < /dev/tty
+  # Удаляем временный файл после работы
+  rm -f "$TMP_SCRIPT"
+  exit 0
+fi
+
+# Тихо ставим whiptail и зависимости, если их нет
 apt-get update -qq && apt-get install -y whiptail curl ipset iptables iptables-persistent -qq >/dev/null 2>&1
 
 # ---------------------------------------------------------------------
@@ -19,7 +35,6 @@ LANG_CHOICE=$(whiptail --title "HostGuard Configuration" --menu "Choose your lan
 "2" "English" 3>&1 1>&2 2>&3)
 
 if [ "$LANG_CHOICE" = "1" ]; then
-    # Локализация: Русский
     T_TITLE="Управление HostGuard"
     T_MAIN_MENU="Выберите действие:"
     T_M_INSTALL="Установка / Настройка HostGuard"
@@ -35,7 +50,6 @@ if [ "$LANG_CHOICE" = "1" ]; then
     T_SUCCESS="Готово! HostGuard успешно настроен и запущен."
     T_UN_SUCCESS="HostGuard полностью удален, правила iptables очищены."
 else
-    # Localization: English
     T_TITLE="HostGuard Management"
     T_MAIN_MENU="Select an action:"
     T_M_INSTALL="Install / Configure HostGuard"
@@ -63,7 +77,6 @@ ACTION=$(whiptail --title "$T_TITLE" --menu "$T_MAIN_MENU" 15 60 2 \
 # ФУНКЦИЯ УДАЛЕНИЯ / UNINSTALL
 # ---------------------------------------------------------------------
 do_uninstall() {
-    # Удаляем правила iptables, связанные с HostGuard
     iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
     iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
     iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
@@ -72,14 +85,11 @@ do_uninstall() {
     iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
     iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
 
-    # Сохраняем чистый iptables
     if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 
-    # Удаляем ipset структуры
     ipset destroy spamhaus 2>/dev/null || true
     ipset destroy firehol 2>/dev/null || true
 
-    # Удаляем скрипты и крон
     rm -f /usr/local/bin/hostguard-update.sh
     rm -f /etc/cron.d/hostguard-update
 
@@ -101,7 +111,6 @@ CHOICES=$(whiptail --title "$T_TITLE" --checklist "$T_COMP_MENU" 20 75 5 \
 "SMTP" "$T_C_SMTP" ON \
 "CRON" "$T_C_CRON" ON 3>&1 1>&2 2>&3)
 
-# Переводим выбор в переменные (0 или 1)
 [[ $CHOICES == *"SPAMHAUS"* ]] && USE_SPAM=1 || USE_SPAM=0
 [[ $CHOICES == *"FIREHOL"* ]] && USE_FIRE=1 || USE_FIRE=0
 [[ $CHOICES == *"SSH"* ]] && USE_SSH=1 || USE_SSH=0
@@ -111,8 +120,6 @@ CHOICES=$(whiptail --title "$T_TITLE" --checklist "$T_COMP_MENU" 20 75 5 \
 # Окно загрузки
 (
 echo 10
-
-# Сначала чистим старое на случай переустановки/изменения конфигурации
 iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
 iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
 iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
@@ -122,12 +129,10 @@ iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j D
 iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
 echo 30
 
-# Создаем ipset структуры на основе выбора
 if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 65536 2>/dev/null || true; else ipset destroy spamhaus 2>/dev/null || true; fi
 if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; else ipset destroy firehol 2>/dev/null || true; fi
 echo 50
 
-# Генерируем обновлятор баз
 cat << 'EOF' > /usr/local/bin/hostguard-update.sh
 #!/bin/bash
 update_set() {
@@ -153,11 +158,9 @@ EOF
 chmod +x /usr/local/bin/hostguard-update.sh
 echo 70
 
-# Запуск обновления баз (только выбранных)
 /usr/local/bin/hostguard-update.sh
 echo 85
 
-# Применение правил iptables на основе выбора
 if [ $USE_SPAM -eq 1 ]; then
     iptables -I OUTPUT 1 -m set --match-set spamhaus dst -j DROP
     iptables -I INPUT 1 -m set --match-set spamhaus src -j DROP
@@ -174,14 +177,12 @@ if [ $USE_SMTP -eq 1 ]; then
     iptables -I OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP
 fi
 
-# Настройка Cron
 if [ $USE_CRON -eq 1 ]; then
     echo "0 */6 * * * root /usr/local/bin/hostguard-update.sh >/dev/null 2>&1" > /etc/cron.d/hostguard-update
 else
     rm -f /etc/cron.d/hostguard-update
 fi
 
-# Сохранение правил
 if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 echo 100
 ) | whiptail --title "$T_TITLE" --gauge "$T_PROG_TEXT" 8 60 0
