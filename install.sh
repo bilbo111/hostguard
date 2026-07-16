@@ -18,11 +18,10 @@ killall apt apt-get 2>/dev/null || true
 rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
 rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock
 
-# Ставим нужные утилиты в фоновом режиме (БЕЗ использования debconf-set-selections)
+# Ставим нужные утилиты в фоновом режиме
 echo "Installing required packages... / Установка пакетов..."
 apt-get update -y -qq
 
-# DEBIAN_FRONTEND=noninteractive + yes "" гарантируют, что iptables-persistent не покажет никаких окон и выберет дефолтные ответы
 export DEBIAN_FRONTEND=noninteractive
 yes "" | apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl ipset iptables iptables-persistent -qq
 
@@ -33,7 +32,8 @@ echo
 echo "Choose your language / Выберите язык:"
 echo "1) Русский (Russian)"
 echo "2) English"
-read -p "Enter 1 or 2: " LANG_CHOICE
+# Читаем ввод напрямую из терминала /dev/tty
+read -p "Enter 1 or 2: " LANG_CHOICE < /dev/tty
 
 if [ "$LANG_CHOICE" = "1" ]; then
     T_MENU_TITLE="--- Главное меню HostGuard ---"
@@ -86,7 +86,8 @@ echo "$T_OPT_INSTALL"
 echo "$T_OPT_UNINSTALL"
 echo "$T_OPT_EXIT"
 echo "-----------------------------------------"
-read -p "$T_PROMPT_ACTION" MENU_ACTION
+# Читаем ввод напрямую из терминала /dev/tty
+read -p "$T_PROMPT_ACTION" MENU_ACTION < /dev/tty
 
 # Функция удаления
 do_uninstall() {
