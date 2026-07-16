@@ -1,5 +1,5 @@
 #!/bin/bash
-# HostGuard Installer & Uninstaller
+# HostGuard Installer & Uninstaller (Pure Console Edition)
 set -e
 
 # Проверка на root
@@ -8,103 +8,88 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# ---------------------------------------------------------------------
-# ХИТРЫЙ ХАК ДЛЯ ЗАПУСКА ЧЕРЕЗ CURL | BASH
-# ---------------------------------------------------------------------
-if [ ! -t 0 ]; then
-  TMP_SCRIPT=$(mktemp /tmp/hostguard-XXXXXX.sh)
-  cat > "$TMP_SCRIPT"
-  # Запускаем локально и передаем управление назад терминалу
-  bash "$TMP_SCRIPT" "$@" < /dev/tty || true
-  rm -f "$TMP_SCRIPT"
-  exit 0
-fi
-
-# Тихо ставим whiptail и зависимости, если их нет
-echo "Checking and releasing apt locks if active..."
+# Снятие блокировок APT и тихая установка пакетов (без вызова окон настроек)
+echo "=== [1/4] Preparing system and packages ==="
 systemctl stop unattended-upgrades 2>/dev/null || true
 killall apt apt-get 2>/dev/null || true
 rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock
 rm -f /var/lib/apt/lists/lock /var/cache/apt/archives/lock
 
-echo "Installing required system packages..."
-apt-get update -y && apt-get install -y whiptail curl ipset iptables iptables-persistent
-
-# ---------------------------------------------------------------------
-# Функция безопасного выхода при нажатии Cancel/Esc
-# ---------------------------------------------------------------------
-safe_exit() {
-    clear
-    echo "Installation cancelled by user."
-    exit 0
-}
+# DEBIAN_FRONTEND=noninteractive гарантирует, что iptables-persistent не покажет плашку
+apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get install -y curl ipset iptables iptables-persistent
 
 # ---------------------------------------------------------------------
 # 1. ВЫБОР ЯЗЫКА / LANGUAGE SELECTION
 # ---------------------------------------------------------------------
-# Временно отключаем set -e, чтобы обработать код выхода whiptail
-set +e
-LANG_CHOICE=$(whiptail --title "HostGuard Configuration" --menu "Choose your language / Выберите язык" 15 50 2 \
-"1" "Русский (Russian)" \
-"2" "English" 3>&1 1>&2 2>&3)
-EXIT_CODE=$?
-set -e
-
-# Если нажали Cancel (1) или Esc (255)
-if [ $EXIT_CODE -ne 0 ]; then
-    safe_exit
-fi
+echo "-----------------------------------------"
+echo "Choose your language / Выберите язык:"
+echo "1) Русский (Russian)"
+echo "2) English"
+echo "-----------------------------------------"
+read -p "Your choice (1-2): " LANG_CHOICE
 
 if [ "$LANG_CHOICE" = "1" ]; then
-    T_TITLE="Управление HostGuard"
-    T_MAIN_MENU="Выберите действие:"
-    T_M_INSTALL="Установка / Настройка HostGuard"
-    T_M_UNINSTALL="Полное удаление HostGuard с сервера"
-    T_COMP_MENU="Выберите компоненты для установки (Пробел - выбор, Enter - продолжить):"
-    T_C_SPAM="База Spamhaus DROP"
-    T_C_FIRE="База FireHOL Level 1"
-    T_C_SSH="Блокировка исходящего SSH (22, 2222...)"
-    T_C_SMTP="Блокировка исходящего SMTP (Spam-боты)"
-    T_C_CRON="Автообновление баз (каждые 6 часов)"
-    T_PROGRESS="Пожалуйста, подождите..."
-    T_PROG_TEXT="Применение настроек и загрузка баз данных..."
-    T_SUCCESS="Готово! HostGuard успешно настроен и запущен."
-    T_UN_SUCCESS="HostGuard полностью удален, правила iptables очищены."
+    # Русский перевод
+    T_MENU_TITLE="--- Главное меню HostGuard ---"
+    T_OPT_INSTALL="1) Установка и настройка защиты"
+    T_OPT_UNINSTALL="2) Полное удаление HostGuard"
+    T_OPT_EXIT="3) Выход"
+    T_PROMPT_ACTION="Выберите действие (1-3): "
+    
+    T_Q_SPAM="Установить базу Spamhaus DROP? (y/n): "
+    T_Q_FIRE="Установить базу FireHOL Level 1? (y/n): "
+    T_Q_SSH="Блокировать исходящий SSH (порты 22, 2222...)? (y/n): "
+    T_Q_SMTP="Блокировать исходящую почту (защита от спам-ботов)? (y/n): "
+    T_Q_CRON="Включить автообновление баз каждые 6 часов через Cron? (y/n): "
+    
+    T_UNINSTALLING="Удаление правил и баз данных..."
+    T_UN_SUCCESS="HostGuard успешно удален с сервера!"
+    
+    T_APPLYING="Применение выбранных настроек..."
+    T_DB_SYNC="Загрузка и синхронизация баз IP (это может занять около минуты)..."
+    T_SUCCESS="Установка успешно завершена! Сервер защищен."
+    T_BYE="Выход из установщика."
 else
-    T_TITLE="HostGuard Management"
-    T_MAIN_MENU="Select an action:"
-    T_M_INSTALL="Install / Configure HostGuard"
-    T_M_UNINSTALL="Completely remove HostGuard from server"
-    T_COMP_MENU="Select components to install (Space - select, Enter - confirm):"
-    T_C_SPAM="Spamhaus DROP database"
-    T_C_FIRE="FireHOL Level 1 database"
-    T_C_SSH="Block outgoing SSH (22, 2222...)"
-    T_C_SMTP="Block outgoing SMTP (Anti-spam)"
-    T_C_CRON="Auto-update databases (every 6 hours)"
-    T_PROGRESS="Please wait..."
-    T_PROG_TEXT="Applying configurations and downloading databases..."
-    T_SUCCESS="Done! HostGuard successfully configured and active."
-    T_UN_SUCCESS="HostGuard completely removed, iptables rules cleared."
+    # English translation
+    T_MENU_TITLE="--- HostGuard Main Menu ---"
+    T_OPT_INSTALL="1) Install and configure protection"
+    T_OPT_UNINSTALL="2) Completely remove HostGuard"
+    T_OPT_EXIT="3) Exit"
+    T_PROMPT_ACTION="Select action (1-3): "
+    
+    T_Q_SPAM="Install Spamhaus DROP database? (y/n): "
+    T_Q_FIRE="Install FireHOL Level 1 database? (y/n): "
+    T_Q_SSH="Block outgoing SSH (ports 22, 2222...)? (y/n): "
+    T_Q_SMTP="Block outgoing SMTP (anti-spam)? (y/n): "
+    T_Q_CRON="Enable automatic DB updates every 6 hours via Cron? (y/n): "
+    
+    T_UNINSTALLING="Removing rules and databases..."
+    T_UN_SUCCESS="HostGuard successfully removed from server!"
+    
+    T_APPLYING="Applying selected configurations..."
+    T_DB_SYNC="Downloading and syncing IP databases (this may take up to a minute)..."
+    T_SUCCESS="Installation successfully completed! Server is secured."
+    T_BYE="Exiting installer."
 fi
 
 # ---------------------------------------------------------------------
 # 2. ГЛАВНОЕ МЕНЮ / MAIN MENU
 # ---------------------------------------------------------------------
-set +e
-ACTION=$(whiptail --title "$T_TITLE" --menu "$T_MAIN_MENU" 15 60 2 \
-"INSTALL" "$T_M_INSTALL" \
-"UNINSTALL" "$T_M_UNINSTALL" 3>&1 1>&2 2>&3)
-EXIT_CODE=$?
-set -e
-
-if [ $EXIT_CODE -ne 0 ]; then
-    safe_exit
-fi
+echo
+echo "$T_MENU_TITLE"
+echo "$T_OPT_INSTALL"
+echo "$T_OPT_UNINSTALL"
+echo "$T_OPT_EXIT"
+echo "-----------------------------------------"
+read -p "$T_PROMPT_ACTION" MENU_ACTION
 
 # ---------------------------------------------------------------------
 # ФУНКЦИЯ УДАЛЕНИЯ / UNINSTALL
 # ---------------------------------------------------------------------
 do_uninstall() {
+    echo
+    echo "$T_UNINSTALLING"
     iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
     iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
     iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
@@ -115,47 +100,57 @@ do_uninstall() {
 
     if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 
+    # Очищаем ipset
     ipset destroy spamhaus 2>/dev/null || true
     ipset destroy firehol 2>/dev/null || true
 
+    # Удаляем файлы
     rm -f /usr/local/bin/hostguard-update.sh
     rm -f /etc/cron.d/hostguard-update
 
-    whiptail --title "$T_TITLE" --msgbox "$T_UN_SUCCESS" 10 50
-    clear
+    echo "$T_UN_SUCCESS"
     exit 0
 }
 
-if [ "$ACTION" = "UNINSTALL" ]; then
+if [ "$MENU_ACTION" = "2" ]; then
     do_uninstall
+elif [ "$MENU_ACTION" = "3" ] || [ -z "$MENU_ACTION" ]; then
+    echo "$T_BYE"
+    exit 0
 fi
 
 # ---------------------------------------------------------------------
-# 3. ВЫБОР КОМПОНЕНТОВ / COMPONENT SELECTION
+# 3. НАСТРОЙКА КОМПОНЕНТОВ / COMPONENT CONFIGURATION
 # ---------------------------------------------------------------------
-set +e
-CHOICES=$(whiptail --title "$T_TITLE" --checklist "$T_COMP_MENU" 20 75 5 \
-"SPAMHAUS" "$T_C_SPAM" ON \
-"FIREHOL" "$T_C_FIRE" ON \
-"SSH" "$T_C_SSH" OFF \
-"SMTP" "$T_C_SMTP" ON \
-"CRON" "$T_C_CRON" ON 3>&1 1>&2 2>&3)
-EXIT_CODE=$?
-set -e
+echo
+echo "--- Configuration / Настройка ---"
 
-if [ $EXIT_CODE -ne 0 ]; then
-    safe_exit
-fi
+ask_yes_no() {
+    local prompt="$1"
+    local ans
+    while true; do
+        read -p "$prompt" ans
+        case "$ans" in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) echo "Please answer y or n / Пожалуйста, введите y или n.";;
+        esac
+    done
+}
 
-[[ $CHOICES == *"SPAMHAUS"* ]] && USE_SPAM=1 || USE_SPAM=0
-[[ $CHOICES == *"FIREHOL"* ]] && USE_FIRE=1 || USE_FIRE=0
-[[ $CHOICES == *"SSH"* ]] && USE_SSH=1 || USE_SSH=0
-[[ $CHOICES == *"SMTP"* ]] && USE_SMTP=1 || USE_SMTP=0
-[[ $CHOICES == *"CRON"* ]] && USE_CRON=1 || USE_CRON=0
+if ask_yes_no "$T_Q_SPAM"; then USE_SPAM=1; else USE_SPAM=0; fi
+if ask_yes_no "$T_Q_FIRE"; then USE_FIRE=1; else USE_FIRE=0; fi
+if ask_yes_no "$T_Q_SSH"; then USE_SSH=1; else USE_SSH=0; fi
+if ask_yes_no "$T_Q_SMTP"; then USE_SMTP=1; else USE_SMTP=0; fi
+if ask_yes_no "$T_Q_CRON"; then USE_CRON=1; else USE_CRON=0; fi
 
-# Окно загрузки
-(
-echo 10
+# ---------------------------------------------------------------------
+# 4. УСТАНОВКА И ПРИМЕНЕНИЕ / INSTALLATION & APPLICATION
+# ---------------------------------------------------------------------
+echo
+echo "$T_APPLYING"
+
+# Чистим старые правила (на случай повторного запуска)
 iptables -D OUTPUT -m set --match-set spamhaus dst -j DROP 2>/dev/null || true
 iptables -D INPUT -m set --match-set spamhaus src -j DROP 2>/dev/null || true
 iptables -D OUTPUT -m set --match-set firehol dst -j DROP 2>/dev/null || true
@@ -163,12 +158,12 @@ iptables -D INPUT -m set --match-set firehol src -j DROP 2>/dev/null || true
 iptables -D OUTPUT -p tcp --dport 22 -j DROP 2>/dev/null || true
 iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
 iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
-echo 30
 
+# Создание ipset
 if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 65536 2>/dev/null || true; else ipset destroy spamhaus 2>/dev/null || true; fi
 if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; else ipset destroy firehol 2>/dev/null || true; fi
-echo 50
 
+# Запись скрипта автообновления баз
 cat << 'EOF' > /usr/local/bin/hostguard-update.sh
 #!/bin/bash
 update_set() {
@@ -192,11 +187,12 @@ if ipset list spamhaus >/dev/null 2>&1; then update_set "spamhaus" "https://www.
 if ipset list firehol >/dev/null 2>&1; then update_set "firehol" "https://iplists.firehol.org/files/firehol_level1.netset"; fi
 EOF
 chmod +x /usr/local/bin/hostguard-update.sh
-echo 70
 
+# Запуск первой синхронизации
+echo "$T_DB_SYNC"
 /usr/local/bin/hostguard-update.sh
-echo 85
 
+# Применение правил iptables
 if [ $USE_SPAM -eq 1 ]; then
     iptables -I OUTPUT 1 -m set --match-set spamhaus dst -j DROP
     iptables -I INPUT 1 -m set --match-set spamhaus src -j DROP
@@ -213,16 +209,15 @@ if [ $USE_SMTP -eq 1 ]; then
     iptables -I OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP
 fi
 
+# Настройка планировщика Cron
 if [ $USE_CRON -eq 1 ]; then
     echo "0 */6 * * * root /usr/local/bin/hostguard-update.sh >/dev/null 2>&1" > /etc/cron.d/hostguard-update
 else
     rm -f /etc/cron.d/hostguard-update
 fi
 
+# Сохранение конфигурации в персистентную базу данных
 if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
-echo 100
-) | whiptail --title "$T_TITLE" --gauge "$T_PROG_TEXT" 8 60 0
 
-# Финальное уведомление
-whiptail --title "$T_TITLE" --msgbox "$T_SUCCESS" 10 50
-clear
+echo
+echo "$T_SUCCESS"
