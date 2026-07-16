@@ -1,5 +1,5 @@
 #!/bin/bash
-# HostGuard Installer, Uninstaller & Config Reset (Fixed Maxelem Edition)
+# HostGuard Installer, Uninstaller & Config Reset (Safe Parser Edition)
 set -e
 
 # Проверка на root
@@ -98,10 +98,14 @@ do_reset() {
     iptables -D OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP 2>/dev/null || true
     iptables -D OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP 2>/dev/null || true
 
+    # Разрешающие правила для DNS
+    iptables -D OUTPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -p tcp --dport 53 -j ACCEPT 2>/dev/null || true
+
     # Сохраняем чистый iptables
     if [ -d /etc/iptables ]; then iptables-save > /etc/iptables/rules.v4; fi
 
-    # Полностью уничтожаем сеты ipset (включая временные)
+    # Полностью уничтожаем сеты ipset
     ipset destroy spamhaus 2>/dev/null || true
     ipset destroy spamhaus_temp 2>/dev/null || true
     ipset destroy firehol 2>/dev/null || true
@@ -172,7 +176,7 @@ echo "$T_APPLYING"
 # Выполняем сброс перед чистой установкой
 do_reset
 
-# Создание чистых ipset списков в памяти с ОДИНАКОВЫМ лимитом 262144
+# Создание чистых ipset списков в памяти
 if [ $USE_SPAM -eq 1 ]; then ipset create spamhaus hash:net family inet maxelem 262144 2>/dev/null || true; fi
 if [ $USE_FIRE -eq 1 ]; then ipset create firehol hash:net family inet maxelem 262144 2>/dev/null || true; fi
 
@@ -186,26 +190,25 @@ update_set() {
     local restore_file="/tmp/${set_name}.restore"
     
     if curl -fsSL "$url" -o "$tmp_file"; then
-        # 1. Гарантированно удаляем старый временный сет, если он завис в памяти
-        ipset destroy ${set_name}_temp 2>/dev/null || true
+        # 1. Убеждаемся, что рабочий сет существует
+        ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
         
-        # 2. Создаем чистый временный сет с лимитом 262144 (строго совпадает с основным!)
-        ipset create ${set_name}_temp hash:net family inet maxelem 262144 2>/dev/null || ipset flush ${set_name}_temp
+        # 2. Очищаем рабочий сет перед заливкой новых данных
+        ipset flush $set_name 2>/dev/null || true
         
-        # 3. Пишем в restore-файл ТОЛЬКО команды добавления (add), БЕЗ команды create.
-        # Парсим исключительно чистые IP/подсети, убирая комментарии и пустые строки.
-        grep -E "^[0-9]" "$tmp_file" | awk '{print "add '${set_name}'_temp " $1}' > "$restore_file"
+        # 3. Парсинг с защитой от точек с запятой и комментариев.
+        # -F';' разделяет строку по точке с запятой и забирает только левую часть (чистый IP).
+        # После этого убираются лишние пробелы и пустые строки.
+        grep -E "^[0-9]" "$tmp_file" | awk -F';' '{print $1}' | awk '{print "add '${set_name}' " $1}' > "$restore_file"
         
-        # 4. Восстанавливаем данные во временный сет без вывода ошибок
-        if ipset restore < "$restore_file" 2>/dev/null; then
-            # Убеждаемся, что основной сет существует с тем же лимитом
-            ipset create $set_name hash:net family inet maxelem 262144 2>/dev/null || true
-            # Меняем временный и основной сеты местами (мгновенно атомарно)
-            ipset swap ${set_name}_temp $set_name
-            # Удаляем временный сет из памяти
-            ipset destroy ${set_name}_temp 2>/dev/null || true
-        fi
+        # 4. Восстанавливаем данные одной мгновенной операцией
+        ipset restore < "$restore_file" 2>/dev/null || true
+        
+        # 5. Чистим за собой файлы
         rm -f "$tmp_file" "$restore_file"
+        
+        # 6. Чистим старые временные сеты, если они зависли
+        ipset destroy ${set_name}_temp 2>/dev/null || true
     fi
 }
 if ipset list spamhaus >/dev/null 2>&1; then update_set "spamhaus" "https://www.spamhaus.org/drop/drop.txt"; fi
@@ -218,20 +221,25 @@ echo "$T_DB_SYNC"
 /usr/local/bin/hostguard-update.sh
 
 # Применение новых правил iptables
+# Сначала ставим разрешающие правила для DNS в самый верх, чтобы не ломать резолв имен!
+iptables -I OUTPUT 1 -p udp --dport 53 -j ACCEPT
+iptables -I OUTPUT 2 -p tcp --dport 53 -j ACCEPT
+
+# Затем накатываем блокировки
 if [ $USE_SPAM -eq 1 ]; then
-    iptables -I OUTPUT 1 -m set --match-set spamhaus dst -j DROP
+    iptables -I OUTPUT 3 -m set --match-set spamhaus dst -j DROP
     iptables -I INPUT 1 -m set --match-set spamhaus src -j DROP
 fi
 if [ $USE_FIRE -eq 1 ]; then
-    iptables -I OUTPUT 1 -m set --match-set firehol dst -j DROP
+    iptables -I OUTPUT 3 -m set --match-set firehol dst -j DROP
     iptables -I INPUT 1 -m set --match-set firehol src -j DROP
 fi
 if [ $USE_SSH -eq 1 ]; then
-    iptables -I OUTPUT -p tcp --dport 22 -j DROP
-    iptables -I OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP
+    iptables -A OUTPUT -p tcp --dport 22 -j DROP
+    iptables -A OUTPUT -p tcp -m multiport --dports 2222,2200,22745,22768,22875 -j DROP
 fi
 if [ $USE_SMTP -eq 1 ]; then
-    iptables -I OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP
+    iptables -A OUTPUT -p tcp -m multiport --dports 25,465,587 -j DROP
 fi
 
 # Настройка планировщика Cron
